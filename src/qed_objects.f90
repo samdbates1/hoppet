@@ -100,17 +100,33 @@ contains
     
   
   !------------------------------------------
-  subroutine InitQEDSplitMat(grid, qed_split)
+  subroutine InitQEDSplitMat(grid, qed_split, factscheme)
     use qed_splitting_functions
+    use dglap_choices
     type(grid_def),      intent(in)    :: grid
     type(qed_split_mat), intent(inout) :: qed_split
+    integer, optional,   intent(in)    :: factscheme
     integer :: nl, nd, nu
     real(dp) :: fy_over_fg
+    integer :: factscheme_used
+    !-- holds temporary results
+    type(grid_conv) :: dconv
+
+    factscheme_used = default_or_opt(factscheme_default, factscheme)
 
     call InitGridConv(grid, qed_split%lo%Pqq_01, sf_Pqq_01)
     call InitGridConv(grid, qed_split%lo%Pyq_01, sf_Pyq_01)
     call InitGridConv(grid, qed_split%lo%Pqy_01, sf_Pqy_01)
     call InitGridConv(grid, qed_split%lo%Pyy_01, sf_Pyy_01)
+    ! Transpose LO splitting functions if performing
+    ! timelike evolution
+    ! SDB: there is no error handling here. Is there a way to throw
+    !	   an error if nloop > 1 when doing timelike evolution?
+    if (factscheme == factscheme_FragMSbar) then
+      dconv = qed_split%lo%Pyq_01
+      qed_split%lo%Pyq_01 = qed_split%lo%Pqy_01
+      qed_split%lo%Pqy_01 = dconv
+    end if
 
     call InitGridConv(grid, qed_split%nlo%Pqg_11, sf_Pqg_11)
     call InitGridConv(grid, qed_split%nlo%Pyg_11, sf_Pyg_11)
