@@ -122,7 +122,7 @@ contains
     ! timelike evolution
     ! SDB: there is no error handling here. Is there a way to throw
     !	   an error if nloop > 1 when doing timelike evolution?
-    if (factscheme == factscheme_FragMSbar) then
+    if (factscheme_used == factscheme_FragMSbar) then
       dconv = qed_split%lo%Pyq_01
       qed_split%lo%Pyq_01 = qed_split%lo%Pqy_01
       qed_split%lo%Pqy_01 = dconv
