@@ -8,8 +8,13 @@ module qed_objects
   private
 
   ! a leading-order splitting matrix (multiplies alpha/2pi)
+  !
+  !   The diagonal splitting functions require separate
+  !   functions for quarks and leptons to facilitate
+  !   handling factors of Nc correctly when transposing
+  !   the splitting matrix for timelike evolution.
   type qed_split_mat_lo
-     type(grid_conv) :: Pqq_01, Pqy_01, Pyq_01, Pyy_01
+     type(grid_conv) :: Pqq_01, Pqy_01, Ply_01, Pyq_01, Pyl_01, Pyy_01
      integer         :: nu, nd, nl, nf
   end type qed_split_mat_lo
 
@@ -116,16 +121,24 @@ contains
 
     call InitGridConv(grid, qed_split%lo%Pqq_01, sf_Pqq_01)
     call InitGridConv(grid, qed_split%lo%Pyq_01, sf_Pyq_01)
+    call InitGridConv(grid, qed_split%lo%Pyl_01, sf_Pyq_01) ! Pyl_01 == Pyq_01
     call InitGridConv(grid, qed_split%lo%Pqy_01, sf_Pqy_01)
+    call InitGridConv(grid, qed_split%lo%Ply_01, sf_Ply_01)
     call InitGridConv(grid, qed_split%lo%Pyy_01, sf_Pyy_01)
     ! Transpose LO splitting functions if performing
     ! timelike evolution
     ! SDB: there is no error handling here. Is there a way to throw
     !	   an error if nloop > 1 when doing timelike evolution?
     if (factscheme_used == factscheme_FragMSbar) then
+      ! Swap the quark functions
       dconv = qed_split%lo%Pyq_01
       qed_split%lo%Pyq_01 = qed_split%lo%Pqy_01
       qed_split%lo%Pqy_01 = dconv
+
+      ! Now swap the lepton functions
+      dconv = qed_split%lo%Pyl_01
+      qed_split%lo%Pyl_01 = qed_split%lo%Ply_01
+      qed_split%lo%Ply_01 = dconv
     end if
 
     call InitGridConv(grid, qed_split%nlo%Pqg_11, sf_Pqg_11)
@@ -181,7 +194,8 @@ contains
     real(dp),               intent(in) :: gq(0:, ncompmin:)
     real(dp)                           :: gout(0:ubound(gq,dim=1), ncompmin:ubound(gq,dim=2))
     !---------------------------------------
-    real(dp) :: flvsum(0:ubound(gq,dim=1)), flvout(0:ubound(gq,dim=1))
+    real(dp) :: flvsum_q(0:ubound(gq,dim=1)), flvsum_l(0:ubound(gq,dim=1))
+    real(dp) :: flvout_q(0:ubound(gq,dim=1)), flvout_l(0:ubound(gq,dim=1))
     integer  :: i
     ! the charge, colour, etc. factor when branching from a flavour;
     ! we allow for the leptons here, even if not using them, to
@@ -211,8 +225,7 @@ contains
 
     ! then set up a charge * multiplicity for branching to a given component
     chg2_toflv = zero
-    ! include a factor of CA=NC for the quarks
-    chg2_toflv(-6:6) = CA * chg2_fromflv(-6:6)
+    chg2_toflv(-6:6) = chg2_fromflv(-6:6)
 
     ! include a factor of 2 for the leptons, because we sum leptons and
     ! anti-leptons
@@ -235,15 +248,19 @@ contains
     ! now get the full "photon"-emission power; if the PDF doesn't
     ! include leptons, then the branching from them is not included
     ! (even if nl /= 0 in the splitting matrix)
-    flvsum = zero
-    do i = ncompmin, min(ubound(gq,dim=2), ncompmaxLeptons)
-       if (chg2_fromflv(i) /= zero) flvsum = flvsum + chg2_fromflv(i) * gq(:,i)
+    flvsum_q = zero
+    flvsum_l = zero
+    do i = ncompmin, min(ubound(gq,dim=2), ncompmax)  ! loop over quarks
+       if (chg2_fromflv(i) /= zero) flvsum_q = flvsum_q + chg2_fromflv(i) * gq(:,i)
+    end do
+    do i = ncompmax + 1, min(ubound(gq,dim=2), ncompmaxLeptons) ! loop over leptons
+       if (chg2_fromflv(i) /= zero) flvsum_l = flvsum_l + chg2_fromflv(i) * gq(:,i)
     end do
     
     ! now set the result
     gout = zero
     ! first the evolution of the photon from quarks and leptons
-    gout(:,8) = qed_lo%Pyq_01 * flvsum
+    gout(:,8) = qed_lo%Pyq_01 * flvsum_q + qed_lo%Pyl_01 * flvsum_l
     ! Then the derivative of the photons associated with their "decay" to fermions.
     ! Include a factor of 1/2 because we sum explicitly over quarks and anti-quarks
     ! whereas the original normalisation from eqs.(21&22) of 1512.00612 involves
@@ -253,11 +270,18 @@ contains
     ! now the evolution of the quarks and leptons:
     ! first calculate the generic splitting from a photon to a fermion
     ! without any charge or colour factors
-    flvout    = qed_lo%Pqy_01 * gq(:,8)
+    flvout_q  = qed_lo%Pqy_01 * gq(:,8)
+    flvout_l  = qed_lo%Ply_01 * gq(:,8)
     ! then add it in with appropriate charges
-    do i = ncompmin, min(ubound(gq,dim=2), ncompmaxLeptons)
+    do i = ncompmin, min(ubound(gq,dim=2), ncompmax)  ! loop over quarks
        if (chg2_toflv(i) /= zero) then
-          gout(:,i) = chg2_toflv(i) * flvout
+          gout(:,i) = chg2_toflv(i) * flvout_q
+          gout(:,i) = gout(:,i) + chg2_fromflv(i) * (qed_lo%Pqq_01 * gq(:,i))
+       end if
+    end do
+    do i = ncompmax + 1, min(ubound(gq,dim=2), ncompmaxLeptons) ! loop over leptons
+       if (chg2_toflv(i) /= zero) then
+          gout(:,i) = chg2_toflv(i) * flvout_l
           gout(:,i) = gout(:,i) + chg2_fromflv(i) * (qed_lo%Pqq_01 * gq(:,i))
        end if
     end do

@@ -26,7 +26,7 @@ module qed_splitting_functions
   implicit none
   private
 
-  public :: sf_Pqq_01, sf_Pqy_01, sf_Pyq_01, sf_Pyy_01
+  public :: sf_Pqq_01, sf_Pqy_01, sf_Ply_01, sf_Pyq_01, sf_Pyy_01
   public :: sf_Pqg_11, sf_Pyg_11, sf_Pgg_11
   public :: sf_PqqV_11, sf_PqqbarV_11, sf_Pgq_11
 
@@ -44,18 +44,28 @@ contains
   end function sf_Pqq_01
 
   !----------------------------------------------------------------------
-  ! this is to be multplied by the eq^2 -- The extra factor of N_C
-  ! is not included here, see line
-  ! chg2_toflv(-6:6) = CA * chg2_fromflv(-6:6)
-  ! in qed_objects.f90
+  ! this is to be multplied by the eq^2
   function sf_Pqy_01(y) result(res)
     real(dp), intent(in) :: y
     real(dp)             :: res
-    res = sf_Pqg(y) / TR
+    ! Multiply by CA == Nc
+    res = CA * sf_Pqg(y) / TR
   end function sf_Pqy_01
 
   !----------------------------------------------------------------------
   ! this is to be multplied by the eq^2
+  !   Leptons need their own splitting function here, to facilitate
+  !   treating factors of Nc properly when transposing the splitting
+  !   matrix for timelike evolution.
+  function sf_Ply_01(y) result(res)
+    real(dp), intent(in) :: y
+    real(dp)             :: res
+    res = sf_Pqg(y) / TR
+  end function sf_Ply_01
+
+  !----------------------------------------------------------------------
+  ! this is to be multplied by the eq^2
+  !   this splitting function is the same for both quarks and leptons
   function sf_Pyq_01(y) result(res)
     real(dp), intent(in) :: y
     real(dp)             :: res
