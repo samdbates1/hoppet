@@ -426,6 +426,7 @@ if (HOPPET_BUILD_EXAMPLES)
                    tabulation_example      
                    tabulation_example_n3lo
                    tabulation_example_qed_streamlined
+                   tabulation_example_qed_frag_streamlined
                    tabulation_example_up_and_down
                    tabulation_example_qed  
                    tabulation_example_streamlined
