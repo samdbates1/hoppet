@@ -51,7 +51,7 @@ endif()
 option(HOPPET_BUILD_EXACT_COEF        "Compile exact coefficient functions"  OFF)
 option(HOPPET_BUILD_EXACT_N3LO_SPLIT  "Compile exact N3LO splitting functions"  OFF)
 option(HOPPET_BUILD_EXAMPLES          "Build examples" ON)
-option(HOPPET_ENABLE_TESTING          "Enable testing. Requires building the examples." ON)
+option(HOPPET_ENABLE_TESTING          "Enable testing. Requires building the examples." OFF)
 option(HOPPET_BUILD_BENCHMARK         "Build benchmark." ON)
 option(HOPPET_BUILD_PYINTERFACE       "Build Python interface." OFF)
 option(HOPPET_BUILD_PYWHEELS          "Build Python wheels. (developer option)" OFF)
@@ -429,6 +429,7 @@ if (HOPPET_BUILD_EXAMPLES)
                    tabulation_example_qed_frag_streamlined
                    tabulation_example_up_and_down
                    tabulation_example_qed  
+                   tabulation_example_qed_frag
                    tabulation_example_streamlined
                    structure_functions_example_n3lo_tests
 		   )
