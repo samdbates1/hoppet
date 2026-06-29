@@ -231,10 +231,11 @@ contains
     ! anti-leptons
     chg2_toflv(9:9+qed_lo%nl-1) = two
 
-    if(OffNlGammaGamma) then
-       sum_chg2_tofl=sum(chg2_toflv(-6:6))
-    else
-       sum_chg2_tofl=sum(chg2_toflv)
+    ! calculate Σ(Nc e_q^2 + e_f^2) for Pyy prefactor
+    ! (CA == Nc)
+    sum_chg2_tofl = CA * sum(chg2_toflv(-6:6))
+    if (.not. OffNlGammaGamma) then 
+       sum_chg2_tofl = sum_chg2_tofl + sum(chg2_toflv(9:11)) ! add lepton charges if necessary
     endif
 
     if(OffLeptonChargesTo) then

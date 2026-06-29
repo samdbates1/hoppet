@@ -38,6 +38,8 @@ program tabulation_example_qed_frag
   type(qed_coupling)  :: coupling_qed
   type(qed_split_mat) :: qed_split
   real(dp) :: integral
+  integer  :: factscheme
+  real(dp) :: moment
 
 
   !! define the interfaces for LHA pdf (by default not used)
@@ -58,20 +60,22 @@ program tabulation_example_qed_frag
   ymax  = 12.0_dp
   dy    = 0.1_dp
 
+  factscheme = factscheme_FragMSbar
+
   ! set up the grid itself (this call sets up a nested grid composed of 4 subgrids)
   call InitGridDefDefault(grid, dy, ymax, order=order)
 
   ! set variables to specify the perturbative accuracy
   nloop_qcd = 1
-  nqcdloop_qed = 0
+  nqcdloop_qed = 1
   with_Plq_nnloqed = .false.
   
   ! initialise the splitting-function holder
-  call InitDglapHolder(grid,dh,factscheme=factscheme_FragMSbar,&
+  call InitDglapHolder(grid,dh,factscheme=factscheme,&
        &                      nloop=nloop_qcd,nflo=3,nfhi=6)
 
   ! and the QED splitting matrices
-  call InitQEDSplitMat(grid, qed_split)
+  call InitQEDSplitMat(grid, qed_split, factscheme=factscheme)
 
   write(6,'(a)') "Splitting functions initialised!"
 
@@ -86,7 +90,7 @@ program tabulation_example_qed_frag
   ! for the electron, the muon and the tau.
   pdf0(:,:) = unpolarized_dummy_ff(xValues(grid))  
 
-  Q0 = sqrt(2.0_dp)  ! the initial scale
+  Q0 = 5.0_dp  ! initial scale - just above the b mass so we don't cross any thresholds
 
   ! allocate and initialise the running coupling with a given
   ! set of quark masses (NB: charm mass just above Q0).
@@ -128,7 +132,7 @@ program tabulation_example_qed_frag
   write(6,'(a)')
 
   ! Get values at some points and print them 
-  Q = 5.0_dp
+  Q = 100.0_dp
   write(6,'(a,f9.4,a)') "           Evaluating PDFs at Q = ",Q," GeV"
   write(6,'(a5,2a12,a14,a10,a11,4a13)') "x",&
        & "u-ubar","d-dbar","2(ubr+dbr)","c+cbar","gluon",&
@@ -147,15 +151,15 @@ program tabulation_example_qed_frag
           &  pdf_at_xQ(iflv_tau)          
   end do
 
-  call EvolvePDF(dh,pdf0,coupling,Q0,Q)
+  call QEDQCDEvolvePDF(dh, qed_split, pdf0, coupling, coupling_qed, Q0, Q, &
+                       nloop_qcd, nqcdloop_qed, with_Plq_nnloqed)
   ! Do the integration
   integral = zero
-  do ix = -6, 6
-    write (*,*) ix
-    write (*,*) TruncatedMoment(grid,pdf0(:,ix),0.0_dp)
-    integral = integral + TruncatedMoment(grid,pdf0(:,ix),0.0_dp)
+  do ix = ncompmin, ncompmaxLeptons
+    moment = TruncatedMoment(grid, pdf0(:,ix), one)
+    write (*,*) 'integral for ID ', ix, ' is ', moment
+    integral = integral + moment
   end do
-  write (*,*) integral
   
   ! some cleaning up (not strictly speaking needed, but illustrates
   ! how it's done)
@@ -175,8 +179,20 @@ contains
   function unpolarized_dummy_ff(xvals) result(pdf)
     real(dp), intent(in) :: xvals(:)
     real(dp)             :: pdf(size(xvals),ncompmin:ncompmaxLeptons)
+    real(dp)             :: gluon(size(xvals)),  d(size(xvals))
+    real(dp)             :: u(size(xvals)),      s(size(xvals))
+    real(dp)             :: c(size(xvals)),      b(size(xvals))
+    real(dp)             :: y(size(xvals)),      e(size(xvals))
+    real(dp)             :: mu(size(xvals)),     tau(size(xvals))
     !---------------------
-    real(dp), parameter :: N_g = 5.0_dp, N_u = 6.0_dp ! must be > 1
+    real(dp), parameter :: N_g = 5.0_dp ! must be > 2
+    real(dp), parameter :: N_d = 3.1_dp,   N_db = 2.1_dp
+    real(dp), parameter :: N_u = 3.8_dp,   N_ub = 2.8_dp
+    real(dp), parameter :: N_s = 2.7_dp,   N_sb = 2.7_dp
+    real(dp), parameter :: N_c = 13.0_dp,  N_cb = 13.0_dp
+    real(dp), parameter :: N_b = 19.0_dp,  N_bb = 19.0_dp
+    real(dp), parameter :: N_y = 2.4_dp,   N_e = 2.7_dp
+    real(dp), parameter :: N_mu = 2.9_dp,  N_tau = 2.2_dp
   
     pdf = zero
     ! clean method for labelling as PDF as being in the human representation
@@ -186,10 +202,31 @@ contains
     ! labels iflv_g, etc., come from the hoppet module, inherited
     ! from the main program
     ! remember that these are all x*q(x)
-    pdf(:, iflv_g) = N_g * (N_g-1) * xvals * (1-xvals)**(N_g-2)
-    pdf(:, iflv_u) = N_u * (N_u-1) * xvals * (1-xvals)**(N_u-2) 
+    pdf(:, iflv_g) = dummy_shape(N_g, xvals);
+    pdf(:, iflv_d) = dummy_shape(N_d, xvals);
+    pdf(:,-iflv_d) = dummy_shape(N_db, xvals);
+    pdf(:, iflv_u) = dummy_shape(N_u, xvals);
+    pdf(:,-iflv_u) = dummy_shape(N_ub, xvals);
+    pdf(:, iflv_s) = dummy_shape(N_s, xvals);
+    pdf(:,-iflv_s) = dummy_shape(N_sb, xvals);
+    pdf(:, iflv_c) = dummy_shape(N_c, xvals);
+    pdf(:,-iflv_c) = dummy_shape(N_cb, xvals);
+    pdf(:, iflv_b) = dummy_shape(N_b, xvals);
+    pdf(:,-iflv_b) = dummy_shape(N_bb, xvals);
+    pdf(:, iflv_photon) = dummy_shape(N_y, xvals);
+    pdf(:, iflv_electron) = 2 * dummy_shape(N_e, xvals);  ! convention is lepton entries are (l + lbar)
+    pdf(:, iflv_muon)     = 2 * dummy_shape(N_mu, xvals);
+    pdf(:, iflv_tau)      = 2 * dummy_shape(N_tau, xvals);
 
   end function unpolarized_dummy_ff
+
+  elemental function dummy_shape(n, x) result(f)
+    real(dp), intent(in) :: n
+    real(dp), intent(in) :: x
+    real(dp)             :: f
+
+    f = n * (n - one) * x * (one - x)**(n - two)
+  end function dummy_shape
 
 end program tabulation_example_qed_frag
 
