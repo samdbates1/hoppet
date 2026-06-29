@@ -37,6 +37,7 @@ program tabulation_example_qed_frag
   !! Additional things for QED
   type(qed_coupling)  :: coupling_qed
   type(qed_split_mat) :: qed_split
+  real(dp) :: integral
 
 
   !! define the interfaces for LHA pdf (by default not used)
@@ -66,7 +67,7 @@ program tabulation_example_qed_frag
   with_Plq_nnloqed = .false.
   
   ! initialise the splitting-function holder
-  call InitDglapHolder(grid,dh,factscheme=factscheme_MSbar,&
+  call InitDglapHolder(grid,dh,factscheme=factscheme_FragMSbar,&
        &                      nloop=nloop_qcd,nflo=3,nfhi=6)
 
   ! and the QED splitting matrices
@@ -127,7 +128,7 @@ program tabulation_example_qed_frag
   write(6,'(a)')
 
   ! Get values at some points and print them 
-  Q = 100.0_dp
+  Q = 5.0_dp
   write(6,'(a,f9.4,a)') "           Evaluating PDFs at Q = ",Q," GeV"
   write(6,'(a5,2a12,a14,a10,a11,4a13)') "x",&
        & "u-ubar","d-dbar","2(ubr+dbr)","c+cbar","gluon",&
@@ -146,7 +147,15 @@ program tabulation_example_qed_frag
           &  pdf_at_xQ(iflv_tau)          
   end do
 
+  call EvolvePDF(dh,pdf0,coupling,Q0,Q)
   ! Do the integration
+  integral = zero
+  do ix = -6, 6
+    write (*,*) ix
+    write (*,*) TruncatedMoment(grid,pdf0(:,ix),0.0_dp)
+    integral = integral + TruncatedMoment(grid,pdf0(:,ix),0.0_dp)
+  end do
+  write (*,*) integral
   
   ! some cleaning up (not strictly speaking needed, but illustrates
   ! how it's done)

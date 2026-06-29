@@ -424,6 +424,7 @@ if (HOPPET_BUILD_EXAMPLES)
                    structure_functions_example_flavour  
                    tabulation_example_2                  
                    tabulation_example      
+                   tabulation_example_frag
                    tabulation_example_n3lo
                    tabulation_example_qed_streamlined
                    tabulation_example_qed_frag_streamlined
