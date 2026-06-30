@@ -37,7 +37,6 @@ program tabulation_example_qed_frag
   !! Additional things for QED
   type(qed_coupling)  :: coupling_qed
   type(qed_split_mat) :: qed_split
-  real(dp) :: integral
   integer  :: factscheme
   real(dp) :: moment
 
@@ -67,7 +66,7 @@ program tabulation_example_qed_frag
 
   ! set variables to specify the perturbative accuracy
   nloop_qcd = 1
-  nqcdloop_qed = 1
+  nqcdloop_qed = 0
   with_Plq_nnloqed = .false.
   
   ! initialise the splitting-function holder
@@ -123,7 +122,7 @@ program tabulation_example_qed_frag
   write(6,'(a)') "Evolution done!"
 
   ! get the value of the tabulation at some point
-  Q = 91.1880_dp;
+  Q = 100_dp;
   write(6,'(a)')
   write(6,'(a,f8.3,a)') " Using effective light_quark_masses = ", effective_light_quark_masses," GeV"
   write(6,'(a,f9.4,a,f8.5)') " At Q = ",Q," GeV, QCD coupling is alpha_s     = ", value(coupling, Q)
@@ -132,7 +131,6 @@ program tabulation_example_qed_frag
   write(6,'(a)')
 
   ! Get values at some points and print them 
-  Q = 100.0_dp
   write(6,'(a,f9.4,a)') "           Evaluating PDFs at Q = ",Q," GeV"
   write(6,'(a5,2a12,a14,a10,a11,4a13)') "x",&
        & "u-ubar","d-dbar","2(ubr+dbr)","c+cbar","gluon",&
@@ -151,14 +149,15 @@ program tabulation_example_qed_frag
           &  pdf_at_xQ(iflv_tau)          
   end do
 
+  write(*,*) ''
+  write(*,*) 'Check each fragmentation function integrates to 1 (N.B. lepton entries are l + lbar)'
+
   call QEDQCDEvolvePDF(dh, qed_split, pdf0, coupling, coupling_qed, Q0, Q, &
                        nloop_qcd, nqcdloop_qed, with_Plq_nnloqed)
   ! Do the integration
-  integral = zero
   do ix = ncompmin, ncompmaxLeptons
     moment = TruncatedMoment(grid, pdf0(:,ix), one)
     write (*,*) 'integral for ID ', ix, ' is ', moment
-    integral = integral + moment
   end do
   
   ! some cleaning up (not strictly speaking needed, but illustrates
