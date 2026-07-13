@@ -121,7 +121,7 @@ contains
 
     call InitGridConv(grid, qed_split%lo%Pqq_01, sf_Pqq_01)
     call InitGridConv(grid, qed_split%lo%Pyq_01, sf_Pyq_01)
-    call InitGridConv(grid, qed_split%lo%Pyl_01, sf_Pyq_01) ! Pyl_01 == Pyq_01
+    call InitGridConv(      qed_split%lo%Pyl_01, qed_split%lo%Pyq_01) ! Pyl_01 == Pyq_01
     call InitGridConv(grid, qed_split%lo%Pqy_01, sf_Pqy_01)
     call InitGridConv(grid, qed_split%lo%Ply_01, sf_Ply_01)
     call InitGridConv(grid, qed_split%lo%Pyy_01, sf_Pyy_01)
@@ -139,6 +139,10 @@ contains
       dconv = qed_split%lo%Pyl_01
       qed_split%lo%Pyl_01 = qed_split%lo%Ply_01
       qed_split%lo%Ply_01 = dconv
+    else if (factscheme_used == factscheme_MSbar) then
+      ! Do nothing, the splitting functions are already in the correct form
+    else
+      call wae_error('InitQEDSplitMat', 'Unsupported factorisation scheme', intval=factscheme_used)
     end if
 
     call InitGridConv(grid, qed_split%nlo%Pqg_11, sf_Pqg_11)
