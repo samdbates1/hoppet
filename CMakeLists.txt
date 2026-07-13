@@ -428,6 +428,7 @@ if (HOPPET_BUILD_EXAMPLES)
                    tabulation_example_qed_streamlined
                    tabulation_example_up_and_down
                    tabulation_example_qed  
+                   tabulation_example_qed_frag
                    tabulation_example_streamlined
                    structure_functions_example_n3lo_tests
 		   )

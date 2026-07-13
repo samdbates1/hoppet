@@ -8,8 +8,13 @@ module qed_objects
   private
 
   ! a leading-order splitting matrix (multiplies alpha/2pi)
+  !
+  !   The diagonal splitting functions require separate
+  !   functions for quarks and leptons to facilitate
+  !   handling factors of Nc correctly when transposing
+  !   the splitting matrix for timelike evolution.
   type qed_split_mat_lo
-     type(grid_conv) :: Pqq_01, Pqy_01, Pyq_01, Pyy_01
+     type(grid_conv) :: Pqq_01, Pqy_01, Ply_01, Pyq_01, Pyl_01, Pyy_01
      integer         :: nu, nd, nl, nf
   end type qed_split_mat_lo
 
@@ -100,17 +105,45 @@ contains
     
   
   !------------------------------------------
-  subroutine InitQEDSplitMat(grid, qed_split)
+  subroutine InitQEDSplitMat(grid, qed_split, factscheme)
     use qed_splitting_functions
+    use dglap_choices
     type(grid_def),      intent(in)    :: grid
     type(qed_split_mat), intent(inout) :: qed_split
+    integer, optional,   intent(in)    :: factscheme
     integer :: nl, nd, nu
     real(dp) :: fy_over_fg
+    integer :: factscheme_used
+    !-- holds temporary results
+    type(grid_conv) :: dconv
+
+    factscheme_used = default_or_opt(factscheme_default, factscheme)
 
     call InitGridConv(grid, qed_split%lo%Pqq_01, sf_Pqq_01)
     call InitGridConv(grid, qed_split%lo%Pyq_01, sf_Pyq_01)
+    call InitGridConv(      qed_split%lo%Pyl_01, qed_split%lo%Pyq_01) ! Pyl_01 == Pyq_01
     call InitGridConv(grid, qed_split%lo%Pqy_01, sf_Pqy_01)
+    call InitGridConv(grid, qed_split%lo%Ply_01, sf_Ply_01)
     call InitGridConv(grid, qed_split%lo%Pyy_01, sf_Pyy_01)
+    ! Transpose LO splitting functions if performing
+    ! timelike evolution
+    ! SDB: there is no error handling here. Is there a way to throw
+    !	   an error if nloop > 1 when doing timelike evolution?
+    if (factscheme_used == factscheme_FragMSbar) then
+      ! Swap the quark functions
+      dconv = qed_split%lo%Pyq_01
+      qed_split%lo%Pyq_01 = qed_split%lo%Pqy_01
+      qed_split%lo%Pqy_01 = dconv
+
+      ! Now swap the lepton functions
+      dconv = qed_split%lo%Pyl_01
+      qed_split%lo%Pyl_01 = qed_split%lo%Ply_01
+      qed_split%lo%Ply_01 = dconv
+    else if (factscheme_used == factscheme_MSbar) then
+      ! Do nothing, the splitting functions are already in the correct form
+    else
+      call wae_error('InitQEDSplitMat', 'Unsupported factorisation scheme', intval=factscheme_used)
+    end if
 
     call InitGridConv(grid, qed_split%nlo%Pqg_11, sf_Pqg_11)
     call InitGridConv(grid, qed_split%nlo%Pyg_11, sf_Pyg_11)
@@ -165,7 +198,8 @@ contains
     real(dp),               intent(in) :: gq(0:, ncompmin:)
     real(dp)                           :: gout(0:ubound(gq,dim=1), ncompmin:ubound(gq,dim=2))
     !---------------------------------------
-    real(dp) :: flvsum(0:ubound(gq,dim=1)), flvout(0:ubound(gq,dim=1))
+    real(dp) :: flvsum_q(0:ubound(gq,dim=1)), flvsum_l(0:ubound(gq,dim=1))
+    real(dp) :: flvout_q(0:ubound(gq,dim=1)), flvout_l(0:ubound(gq,dim=1))
     integer  :: i
     ! the charge, colour, etc. factor when branching from a flavour;
     ! we allow for the leptons here, even if not using them, to
@@ -195,17 +229,17 @@ contains
 
     ! then set up a charge * multiplicity for branching to a given component
     chg2_toflv = zero
-    ! include a factor of CA=NC for the quarks
-    chg2_toflv(-6:6) = CA * chg2_fromflv(-6:6)
+    chg2_toflv(-6:6) = chg2_fromflv(-6:6)
 
     ! include a factor of 2 for the leptons, because we sum leptons and
     ! anti-leptons
     chg2_toflv(9:9+qed_lo%nl-1) = two
 
-    if(OffNlGammaGamma) then
-       sum_chg2_tofl=sum(chg2_toflv(-6:6))
-    else
-       sum_chg2_tofl=sum(chg2_toflv)
+    ! calculate Σ(Nc e_q^2 + e_f^2) for Pyy prefactor
+    ! (CA == Nc)
+    sum_chg2_tofl = CA * sum(chg2_toflv(-6:6))
+    if (.not. OffNlGammaGamma) then 
+       sum_chg2_tofl = sum_chg2_tofl + sum(chg2_toflv(9:11)) ! add lepton charges if necessary
     endif
 
     if(OffLeptonChargesTo) then
@@ -219,15 +253,19 @@ contains
     ! now get the full "photon"-emission power; if the PDF doesn't
     ! include leptons, then the branching from them is not included
     ! (even if nl /= 0 in the splitting matrix)
-    flvsum = zero
-    do i = ncompmin, min(ubound(gq,dim=2), ncompmaxLeptons)
-       if (chg2_fromflv(i) /= zero) flvsum = flvsum + chg2_fromflv(i) * gq(:,i)
+    flvsum_q = zero
+    flvsum_l = zero
+    do i = ncompmin, min(ubound(gq,dim=2), ncompmax)  ! loop over quarks
+       if (chg2_fromflv(i) /= zero) flvsum_q = flvsum_q + chg2_fromflv(i) * gq(:,i)
+    end do
+    do i = ncompmax + 1, min(ubound(gq,dim=2), ncompmaxLeptons) ! loop over leptons
+       if (chg2_fromflv(i) /= zero) flvsum_l = flvsum_l + chg2_fromflv(i) * gq(:,i)
     end do
     
     ! now set the result
     gout = zero
     ! first the evolution of the photon from quarks and leptons
-    gout(:,8) = qed_lo%Pyq_01 * flvsum
+    gout(:,8) = qed_lo%Pyq_01 * flvsum_q + qed_lo%Pyl_01 * flvsum_l
     ! Then the derivative of the photons associated with their "decay" to fermions.
     ! Include a factor of 1/2 because we sum explicitly over quarks and anti-quarks
     ! whereas the original normalisation from eqs.(21&22) of 1512.00612 involves
@@ -237,11 +275,18 @@ contains
     ! now the evolution of the quarks and leptons:
     ! first calculate the generic splitting from a photon to a fermion
     ! without any charge or colour factors
-    flvout    = qed_lo%Pqy_01 * gq(:,8)
+    flvout_q  = qed_lo%Pqy_01 * gq(:,8)
+    flvout_l  = qed_lo%Ply_01 * gq(:,8)
     ! then add it in with appropriate charges
-    do i = ncompmin, min(ubound(gq,dim=2), ncompmaxLeptons)
+    do i = ncompmin, min(ubound(gq,dim=2), ncompmax)  ! loop over quarks
        if (chg2_toflv(i) /= zero) then
-          gout(:,i) = chg2_toflv(i) * flvout
+          gout(:,i) = chg2_toflv(i) * flvout_q
+          gout(:,i) = gout(:,i) + chg2_fromflv(i) * (qed_lo%Pqq_01 * gq(:,i))
+       end if
+    end do
+    do i = ncompmax + 1, min(ubound(gq,dim=2), ncompmaxLeptons) ! loop over leptons
+       if (chg2_toflv(i) /= zero) then
+          gout(:,i) = chg2_toflv(i) * flvout_l
           gout(:,i) = gout(:,i) + chg2_fromflv(i) * (qed_lo%Pqq_01 * gq(:,i))
        end if
     end do

@@ -269,7 +269,7 @@ subroutine hoppetStartExtended(ymax,dy,Qmin,Qmax,dlnlnQ,nloop,order,factscheme)
        &                      nloop=nloop,nflo=3,nfhi=6)
 
   if(with_qed) then
-     call InitQEDSplitMat(grid, qed_split)
+     call InitQEDSplitMat(grid, qed_split, factscheme=factscheme)
   endif
   
   ! choose a sensible default number of flavours.
