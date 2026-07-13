@@ -95,11 +95,25 @@ contains
 !! Initialises a QED coupling. New interface, which explicitly includes
 !! the effective light quark mass, which can be tuned to reproduce the
 !! correct high-scale QED behaviour
-subroutine InitQEDCoupling_new(coupling, m_light_quarks, m_heavy_quarks, value_at_scale_0)
+!!
+!! - coupling: the QED couplign object that is being initialised
+!! - m_light_quarks: the effective light quark mass, which can be tuned to reproduce the
+!!                   correct high-scale QED behaviour
+!! - m_heavy_quarks: an array of heavy-quark masses, in the order mc, mb, mt
+!! - value_at_scale_0: optional, the value of the QED coupling at the zero scale 
+!!                    (defaults to alpha_qed_scale_0 ~ 1/137)
+!! - m_electron_in, m_muon_in, m_tau_in: optional, the lepton masses to use (defaults to the PDG 2025 values)
+!!
+!! Note that there is an assumed ordering of the thresholds, which is checked for consistency:
+!!   m_electron < (m_muon , m_light_quarks) < mc < m_tau < m_b < m_t
+!!
+subroutine InitQEDCoupling_new(coupling, m_light_quarks, m_heavy_quarks, value_at_scale_0,&
+                               m_electron_in, m_muon_in, m_tau_in)
     use assertions
     type(qed_coupling), intent(out) :: coupling
     real(dp),           intent(in)  :: m_light_quarks, m_heavy_quarks(4:6)
     real(dp), optional, intent(in)  :: value_at_scale_0 ! defaults to alpha_qed_scale_0
+    real(dp), optional, intent(in)  :: m_electron_in, m_muon_in, m_tau_in
     !--------------------------------------------
     real(dp) :: mc, mb, mt
     integer :: i
@@ -116,19 +130,27 @@ subroutine InitQEDCoupling_new(coupling, m_light_quarks, m_heavy_quarks, value_a
     
     ! set up the thresholds
     coupling%thresholds(0) = zero
-    coupling%thresholds(1) = m_electron
+    coupling%thresholds(1) = default_or_opt(m_electron, m_electron_in)
     if (m_light_quarks >= m_muon) then
-      coupling%thresholds(2) = m_muon
+      coupling%thresholds(2) = default_or_opt(m_muon, m_muon_in)
       coupling%thresholds(3) = m_light_quarks
     else
       coupling%thresholds(2) = m_light_quarks
-      coupling%thresholds(3) = m_muon
+      coupling%thresholds(3) = default_or_opt(m_muon, m_muon_in)
     end if
     coupling%thresholds(4) = mc
     coupling%thresholds(5) = m_tau
     coupling%thresholds(6) = mb
     coupling%thresholds(7) = mt
     coupling%thresholds(8) = 1e200_dp
+
+    ! check the thresholds satisfy our ordering assumptions
+    do i = 0, n_thresholds
+      if (coupling%thresholds(i+1) < coupling%thresholds(i)) then
+         call wae_error("InitQEDCoupling", &
+                        "thresholds must be increasing, but were not for threshold scale",intval=i)
+      end if
+    end do
 
     ! set up the numbers of flavours just above each threshold
     !                       nlept  ndown  nup
